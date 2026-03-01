@@ -4,7 +4,7 @@
   "version": "1.0",
   "description": "Yapay zeka tabanlı sözleşme özetleyici için ilk merhaba dünya denemesi.",
   "action": {
-    "default_popup": "popup.html",
+    "default_popup": "assets/popup/popup.html",
     "default_title": "Özetleyiciyi Aç"
   }
 }
