@@ -1,18 +1,51 @@
 <!DOCTYPE html>
 <html lang="tr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
     <title>Sözleşme Özetleyici</title>
-    <link rel="stylesheet" href="popup.css" />
-  </head>
-  <body>
-    <main class="container">
-      <h1>Sözleşme Özetleyici</h1>
-      <p class="subtitle">Son özet aşağıda görünecek.</p>
-      <div id="status" class="status">Bekleniyor...</div>
-      <pre id="output" class="output"></pre>
-    </main>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>📜 Sözleşme Özetleyici</h1>
+            <p class="subtitle">Bu sayfadaki hukuksal veya uzun metinleri analiz edin.</p>
+        </header>
+
+        <main>
+            <button id="summarize-btn" class="primary-btn">
+                <span class="btn-text">Bu Sayfayı Özetle</span>
+                <span class="loader hidden"></span>
+            </button>
+
+            <div id="status" class="status-box hidden">
+            </div>
+
+            <div id="result-container" class="result-container hidden">
+                <div class="score-card">
+                    <h3>Risk Skoru</h3>
+                    <div id="risk-score" class="score-value">0</div>
+                    <div id="risk-label" class="score-label">Bilinmiyor</div>
+                </div>
+
+                <div class="section">
+                    <h3>✅ Özet</h3>
+                    <ul id="summary-points" class="list"></ul>
+                </div>
+
+                <div class="section">
+                    <h3>⚠️ Riskler ve Dikkat Edilecekler</h3>
+                    <ul id="risk-points" class="list risks"></ul>
+                </div>
+
+                <div class="section">
+                    <h3>📌 Ek Notlar</h3>
+                    <ul id="note-points" class="list notes"></ul>
+                </div>
+            </div>
+        </main>
+    </div>
     <script src="popup.js"></script>
-  </body>
+</body>
 </html>
