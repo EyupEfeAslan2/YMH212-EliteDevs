@@ -1,18 +1,67 @@
 <!DOCTYPE html>
 <html lang="tr">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sözleşme Özetleyici</title>
-    <link rel="stylesheet" href="popup.css" />
-  </head>
-  <body>
-    <main class="container">
-      <h1>Sözleşme Özetleyici</h1>
-      <p class="subtitle">Son özet aşağıda görünecek.</p>
-      <div id="status" class="status">Bekleniyor...</div>
-      <pre id="output" class="output"></pre>
-    </main>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <div class="app-container">
+        <header class="header">
+            <div class="logo-title">
+                <span class="icon-shield">🛡️</span>
+                <h1>Sözleşme Özetleyici</h1>
+            </div>
+            <div class="header-actions">
+                <button id="btn-copy" class="btn-icon" title="Özeti Kopyala">📄</button>
+                <button id="btn-settings" class="btn-icon" title="Ayarlar">⚙️</button>
+                <button id="btn-close" class="btn-icon" title="Kapat">✖️</button>
+            </div>
+        </header>
+
+        <section class="risk-section">
+            <div class="gauge-container">
+                <div class="gauge-needle" style="transform: rotate(32.4deg);"></div>
+                <div class="score">6.8</div>
+                <div class="score-label">Risk Skoru</div>
+                <div class="gauge-min">0</div>
+                <div class="gauge-max">10</div>
+            </div>
+        </section>
+
+        <section class="summary-section">
+            <p>Bu sözleşme, kullanıcı verilerini üçüncü şahıslarla paylaşma hakkını saklı tutar ve veri saklama sürelerindeki belirsizlik nedeniyle orta-yüksek düzeyde gizlilik riski barındırır.</p>
+        </section>
+
+        <section class="policy-section">
+            <h2>Politika Analizi</h2>
+            <ul class="policy-list">
+                <li class="policy-item red">
+                    <span class="dot"></span>
+                    <p>Kişisel veriler üçüncü taraf reklamcılarla paylaşılıyor</p>
+                </li>
+                <li class="policy-item red">
+                    <span class="dot"></span>
+                    <p>Siteler arası tarama etkinliği takibi etkin</p>
+                </li>
+                <li class="policy-item yellow">
+                    <span class="dot"></span>
+                    <p>Veri saklama süresi açıkça belirtilmemiş</p>
+                </li>
+                <li class="policy-item green">
+                    <span class="dot"></span>
+                    <p>Veriler endüstri standardı SSL ile şifreleniyor</p>
+                </li>
+            </ul>
+        </section>
+
+        <footer class="chat-section">
+            <input type="text" placeholder="Bu politika hakkında sor..." class="chat-input">
+            <button class="btn-send">➤</button> 
+        </footer>
+    </div>
+    
     <script src="popup.js"></script>
-  </body>
+</body>
 </html>
