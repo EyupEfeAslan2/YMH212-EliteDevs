@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import os
+import sqlite3
 from typing import List, Optional
+from urllib.parse import urlparse
 
 import httpx
 from dotenv import load_dotenv
@@ -19,6 +22,76 @@ DEFAULT_GEMINI_URL = (
     f"{GEMINI_MODEL}:generateContent"
 )
 
+# ---------------------------------------------------------------------------
+# Database setup
+# ---------------------------------------------------------------------------
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.path.join(BASE_DIR, "links.db")
+
+
+def get_connection() -> sqlite3.Connection:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    return conn
+
+
+def init_db() -> None:
+    with get_connection() as conn:
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS links (
+                id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                url_hash     TEXT    NOT NULL UNIQUE,
+                raw_url      TEXT    NOT NULL,
+                summary_data TEXT,
+                site_name    TEXT,
+                created_at   DATETIME NOT NULL DEFAULT (datetime('now'))
+            )
+        """)
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_links_url_hash   ON links (url_hash)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_links_site_name  ON links (site_name)")
+        conn.execute("CREATE INDEX IF NOT EXISTS idx_links_created_at ON links (created_at)")
+        conn.commit()
+
+
+def save_link(raw_url: str, summary_data: str, site_name: Optional[str]) -> None:
+    """Insert a link record; silently skip if the URL was already saved."""
+    url_hash = hashlib.sha256(raw_url.encode()).hexdigest()
+    with get_connection() as conn:
+        try:
+            conn.execute(
+                """
+                INSERT INTO links (url_hash, raw_url, summary_data, site_name)
+                VALUES (?, ?, ?, ?)
+                """,
+                (url_hash, raw_url, summary_data, site_name),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            pass  # URL already exists — no duplicate
+
+
+def get_all_links() -> list[dict]:
+    with get_connection() as conn:
+        rows = conn.execute(
+            "SELECT * FROM links ORDER BY created_at DESC"
+        ).fetchall()
+        return [dict(row) for row in rows]
+
+
+def get_link_by_url(raw_url: str) -> Optional[dict]:
+    url_hash = hashlib.sha256(raw_url.encode()).hexdigest()
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM links WHERE url_hash = ?", (url_hash,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+# ---------------------------------------------------------------------------
+# Models
+# ---------------------------------------------------------------------------
+
 
 class SummarizeRequest(BaseModel):
     text: str = Field(..., min_length=1)
@@ -34,6 +107,19 @@ class SummaryResponse(BaseModel):
     model: str
 
 
+class LinkRecord(BaseModel):
+    id: int
+    url_hash: str
+    raw_url: str
+    summary_data: Optional[str]
+    site_name: Optional[str]
+    created_at: str
+
+
+# ---------------------------------------------------------------------------
+# App
+# ---------------------------------------------------------------------------
+
 app = FastAPI(title=APP_TITLE)
 
 app.add_middleware(
@@ -43,6 +129,17 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def startup() -> None:
+    """Create the database and tables when the server starts."""
+    init_db()
+
+
+# ---------------------------------------------------------------------------
+# Helpers
+# ---------------------------------------------------------------------------
 
 
 def build_prompt(text: str, title: Optional[str], url: Optional[str]) -> str:
@@ -125,7 +222,35 @@ async def call_gemini(prompt: str) -> SummaryResponse:
         )
 
 
+# ---------------------------------------------------------------------------
+# Routes
+# ---------------------------------------------------------------------------
+
+
 @app.post("/summarize", response_model=SummaryResponse)
 async def summarize(payload: SummarizeRequest) -> SummaryResponse:
     prompt = build_prompt(payload.text, payload.title, payload.url)
-    return await call_gemini(prompt)
+    result = await call_gemini(prompt)
+
+    # Save to database if a URL was provided
+    if payload.url:
+        site_name = urlparse(payload.url).netloc or None
+        save_link(
+            raw_url=payload.url,
+            summary_data=result.model_dump_json(),
+            site_name=site_name,
+        )
+
+    return result
+
+
+@app.get("/links", response_model=List[LinkRecord])
+def list_links() -> list[dict]:
+    """Return all saved links ordered by most recent."""
+    return get_all_links()
+
+
+@app.get("/links/search", response_model=Optional[LinkRecord])
+def search_link(url: str) -> Optional[dict]:
+    """Look up a previously summarized URL."""
+    return get_link_by_url(url)
