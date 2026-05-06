@@ -1,17 +1,19 @@
 from __future__ import annotations
-
 import hashlib
 import json
 import os
 import sqlite3
+from contextlib import asynccontextmanager
 from typing import List, Optional
 from urllib.parse import urlparse
-
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
+from config import get_gemini_api_key
+from summarize import summarize_text, get_summary_stats, get_analysis_segments
+from chat import create_chat_session
 
 load_dotenv()
 
@@ -88,6 +90,35 @@ def get_link_by_url(raw_url: str) -> Optional[dict]:
         return dict(row) if row else None
 
 
+def get_link_by_hash(url_hash: str) -> Optional[dict]:
+    """Get summary data by hash from database."""
+    with get_connection() as conn:
+        row = conn.execute(
+            "SELECT * FROM links WHERE url_hash = ?", (url_hash,)
+        ).fetchone()
+        return dict(row) if row else None
+
+
+def save_text_summary(text: str, summary_data: str, url: Optional[str] = None) -> None:
+    """Save text summary with text hash. If URL provided, use it as raw_url."""
+    text_hash = hashlib.sha256(text.encode()).hexdigest()
+    raw_url = url if url else f"text_hash_{text_hash[:16]}"
+    site_name = urlparse(url).netloc if url else None
+    
+    with get_connection() as conn:
+        try:
+            conn.execute(
+                """
+                INSERT INTO links (url_hash, raw_url, summary_data, site_name)
+                VALUES (?, ?, ?, ?)
+                """,
+                (text_hash, raw_url, summary_data, site_name),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            pass  # Hash already exists — no duplicate
+
+
 # ---------------------------------------------------------------------------
 # Models
 # ---------------------------------------------------------------------------
@@ -99,28 +130,51 @@ class SummarizeRequest(BaseModel):
     title: Optional[str] = None
 
 
-class SummaryResponse(BaseModel):
-    risk_score: int
-    summary_points: List[str]
-    risks: List[str]
-    notes: List[str]
-    model: str
-
-
-class LinkRecord(BaseModel):
+class AnalysisSegment(BaseModel):
     id: int
-    url_hash: str
-    raw_url: str
-    summary_data: Optional[str]
-    site_name: Optional[str]
-    created_at: str
+    text: str
+    risk_level: str  # "red", "yellow", "green"
+    reason: str
+
+
+class SummaryStats(BaseModel):
+    risk_score: int  # 1-10
+    overall_summary: str
+    critical_highlight: str
+
+
+class SummaryResponse(BaseModel):
+    error: bool = False
+    summary_stats: Optional[SummaryStats] = None
+    analysis_segments: Optional[List[AnalysisSegment]] = None
+    message: Optional[str] = None
+
+
+class ChatMessage(BaseModel):
+    user_id: Optional[str] = None
+    contract_text: str = Field(..., min_length=1)
+    message: str = Field(..., min_length=1)
+
+
+class ChatResponse(BaseModel):
+    response: str
+    language_detected: Optional[str] = None
 
 
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 
-app = FastAPI(title=APP_TITLE)
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Lifespan context manager for startup/shutdown events."""
+    # Startup event
+    init_db()
+    yield
+    # Shutdown event (if needed)
+
+
+app = FastAPI(title=APP_TITLE, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -131,18 +185,13 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
-def startup() -> None:
-    """Create the database and tables when the server starts."""
-    init_db()
-
-
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
 
 
 def build_prompt(text: str, title: Optional[str], url: Optional[str]) -> str:
+    """Legacy function - kept for backward compatibility."""
     meta = []
     if title:
         meta.append(f"Baslik: {title}")
@@ -159,18 +208,16 @@ def build_prompt(text: str, title: Optional[str], url: Optional[str]) -> str:
     )
 
 
-async def call_gemini(prompt: str) -> SummaryResponse:
+async def call_gemini_legacy(prompt: str) -> dict:
+    """Legacy function - kept for backward compatibility."""
     api_key = os.getenv("GEMINI_API_KEY", "API_Buraya_Gelecek")
     gemini_url = os.getenv("GEMINI_API_URL", DEFAULT_GEMINI_URL)
 
     if api_key == "API_Buraya_Gelecek":
-        return SummaryResponse(
-            risk_score=0,
-            summary_points=["API_Buraya_Gelecek olarak ayarlanmis."],
-            risks=[],
-            notes=["GEMINI_API_KEY .env icinden doldurulmali."],
-            model=GEMINI_MODEL,
-        )
+        return {
+            "error": True,
+            "message": "GEMINI_API_KEY not configured"
+        }
 
     payload = {
         "contents": [
@@ -205,21 +252,15 @@ async def call_gemini(prompt: str) -> SummaryResponse:
 
     try:
         parsed = json.loads(text)
-        return SummaryResponse(
-            risk_score=int(parsed.get("risk_score", 0)),
-            summary_points=list(parsed.get("summary_points", [])),
-            risks=list(parsed.get("risks", [])),
-            notes=list(parsed.get("notes", [])),
-            model=GEMINI_MODEL,
-        )
+        return {
+            "error": False,
+            "data": parsed
+        }
     except (json.JSONDecodeError, TypeError, ValueError):
-        return SummaryResponse(
-            risk_score=0,
-            summary_points=["Model JSON disi cikti uretti."],
-            risks=[],
-            notes=[text or "Bos yanit."],
-            model=GEMINI_MODEL,
-        )
+        return {
+            "error": True,
+            "message": "Failed to parse response"
+        }
 
 
 # ---------------------------------------------------------------------------
@@ -229,28 +270,116 @@ async def call_gemini(prompt: str) -> SummaryResponse:
 
 @app.post("/summarize", response_model=SummaryResponse)
 async def summarize(payload: SummarizeRequest) -> SummaryResponse:
-    prompt = build_prompt(payload.text, payload.title, payload.url)
-    result = await call_gemini(prompt)
+    """Summarize a privacy agreement or legal text.
+    
+    Checks cache first:
+    1. Creates hash of the text
+    2. Checks if summary exists in database
+    3. If exists, returns cached summary
+    4. If not, generates new summary and saves it
+    """
+    # 1. Hash text for caching
+    text_hash = hashlib.sha256(payload.text.encode()).hexdigest()
+    
+    # 2. Check if summary already exists in database
+    cached = get_link_by_hash(text_hash)
+    if cached and cached.get("summary_data"):
+        try:
+            cached_result = json.loads(cached["summary_data"])
+            if not cached_result.get("error"):
+                print(f"Using stored summary for text hash: {text_hash[:16]}...")
+                return SummaryResponse(
+                    error=False,
+                    summary_stats=SummaryStats(
+                        risk_score=cached_result["summary_stats"]["risk_score"],
+                        overall_summary=cached_result["summary_stats"]["overall_summary"],
+                        critical_highlight=cached_result["summary_stats"]["critical_highlight"],
+                    ),
+                    analysis_segments=[
+                        AnalysisSegment(
+                            id=seg["id"],
+                            text=seg["text"],
+                            risk_level=seg["risk_level"],
+                            reason=seg["reason"],
+                        )
+                        for seg in cached_result.get("analysis_segments", [])
+                    ]
+                )
+        except Exception as e:
+            print(f"Warning: Could not use cache: {e}")
+    
+    # 3. Generate new summary
+    print(f"Generating new summary for text hash: {text_hash[:16]}...")
+    result = summarize_text(payload.text)
 
-    # Save to database if a URL was provided
-    if payload.url:
-        site_name = urlparse(payload.url).netloc or None
-        save_link(
-            raw_url=payload.url,
-            summary_data=result.model_dump_json(),
-            site_name=site_name,
+    # Handle errors from summarize module
+    if result.get("error"):
+        return SummaryResponse(
+            error=True,
+            message=result.get("message", "Unknown error occurred")
         )
 
-    return result
+    # 4. Save to database
+    save_text_summary(
+        text=payload.text,
+        summary_data=json.dumps(result),
+        url=payload.url
+    )
+    print(f"Summary saved with text hash: {text_hash[:16]}...")
+
+    # Format response
+    return SummaryResponse(
+        error=False,
+        summary_stats=SummaryStats(
+            risk_score=result["summary_stats"]["risk_score"],
+            overall_summary=result["summary_stats"]["overall_summary"],
+            critical_highlight=result["summary_stats"]["critical_highlight"],
+        ),
+        analysis_segments=[
+            AnalysisSegment(
+                id=seg["id"],
+                text=seg["text"],
+                risk_level=seg["risk_level"],
+                reason=seg["reason"],
+            )
+            for seg in result.get("analysis_segments", [])
+        ]
+    )
 
 
-@app.get("/links", response_model=List[LinkRecord])
+@app.post("/chat")
+async def chat(payload: ChatMessage) -> ChatResponse:
+    """Answer questions about a privacy agreement."""
+    try:
+        session = create_chat_session(
+            payload.contract_text,
+            summary=None  
+        )
+        response_text = session.ask(payload.message)
+        
+        return ChatResponse(
+            response=response_text
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Chat error: {str(e)}"
+        )
+
+
+@app.get("/links", response_model=List[dict])
 def list_links() -> list[dict]:
     """Return all saved links ordered by most recent."""
     return get_all_links()
 
 
-@app.get("/links/search", response_model=Optional[LinkRecord])
+@app.get("/links/search")
 def search_link(url: str) -> Optional[dict]:
     """Look up a previously summarized URL."""
     return get_link_by_url(url)
+
+
+if __name__ == "__main__":
+    import uvicorn
+    print("Sunucu başlatılıyor: http://0.0.0.0:8000")
+    uvicorn.run(app, host="0.0.0.0", port=8000)
