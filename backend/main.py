@@ -353,7 +353,7 @@ async def chat(payload: ChatMessage) -> ChatResponse:
     try:
         session = create_chat_session(
             payload.contract_text,
-            summary=None  # Can be populated with pre-computed summary
+            summary=None  
         )
         response_text = session.ask(payload.message)
         
