@@ -80,7 +80,6 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
 });
-=======
 const btn = document.getElementById("summarize-btn");
 const btnText = document.querySelector(".btn-text");
 const loader = document.querySelector(".loader");
