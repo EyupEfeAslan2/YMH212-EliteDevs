@@ -223,7 +223,7 @@ curl -X POST http://localhost:8000/summarize \
   <img src="assets/EliteDevs_logo.png" alt="EliteDevs Logo" width="250">
   <br>
   <br>
-  <strong>EliteDevs</strong> — YMH212
+  <strong>EliteDevs</strong>
 </p>
 ---
 
