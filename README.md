@@ -219,10 +219,11 @@ curl -X POST http://localhost:8000/summarize \
 
 ## 👥 Ekip
 
-**EliteDevs** — YMH212 Yazılım Mühendisliği Dersi Projesi
+<p align="center">
+  <img src="assets/EliteDevs_logo.png" alt="EliteDevs Logo" width="250">
+</p>
 
+**EliteDevs**
 ---
 
-## 📄 Lisans
-
-Bu proje eğitim amaçlı geliştirilmiştir.
+YMH212
