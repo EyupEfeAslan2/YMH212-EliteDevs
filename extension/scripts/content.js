@@ -42,7 +42,7 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     }
     return true; // Asenkron yanıt için gerekli
 });
-=======
+
 (() => {
   const extractPageText = () => {
     if (!document.body) return "";

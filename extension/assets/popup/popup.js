@@ -1,211 +1,404 @@
+const API_BASE = 'http://localhost:8000';
 
-document.addEventListener('DOMContentLoaded', () => {
-    
-    const btnClose = document.getElementById('btn-close');
-    const btnCopy = document.getElementById('btn-copy');
-    const btnSettings = document.getElementById('btn-settings');
-    const needle = document.querySelector('.gauge-needle');
-    const scoreElement = document.querySelector('.score');
-    const summaryElement = document.querySelector('.summary-section p');
-    const policyListElement = document.querySelector('.policy-list');
+// DOM elements
+const btnSettings = document.getElementById('btn-settings');
+const settingsPanel = document.getElementById('settings-panel');
+const apiKeyInput = document.getElementById('api-key-input');
+const btnSaveSettings = document.getElementById('btn-save-settings');
+const settingsStatus = document.getElementById('settings-status');
+const connectionStatus = document.getElementById('connection-status');
 
-    btnClose.addEventListener('click', () => {
-        window.close();
-    });
+const btnSummarize = document.getElementById('btn-summarize');
+const btnText = document.querySelector('.btn-text');
+const loader = document.getElementById('loader');
+const statusMessage = document.getElementById('status-message');
 
-    btnCopy.addEventListener('click', () => {
-        const summaryText = summaryElement.innerText;
-        navigator.clipboard.writeText(summaryText).then(() => {
-            const originalIcon = btnCopy.innerText;
-            btnCopy.innerText = "✅";
-            setTimeout(() => {
-                btnCopy.innerText = originalIcon;
-            }, 1500);
-        });
-    });
+const resultsSection = document.getElementById('results-section');
+const gaugeNeedle = document.getElementById('gauge-needle');
+const scoreValue = document.getElementById('score-value');
+const scoreLabel = document.getElementById('score-label');
+const summaryText = document.getElementById('summary-text');
+const criticalSection = document.getElementById('critical-section');
+const criticalText = document.getElementById('critical-text');
+const policyList = document.getElementById('policy-list');
+const btnCopy = document.getElementById('btn-copy');
 
-    btnSettings.addEventListener('click', () => {
-        alert("Ayarlar sayfası daha sonra eklenecektir.");
-    });
+const chatSection = document.getElementById('chat-section');
+const chatMessages = document.getElementById('chat-messages');
+const chatInput = document.getElementById('chat-input');
+const btnSend = document.getElementById('btn-send');
 
-    function updateUI(data) {
-        scoreElement.innerText = data.score.toFixed(1);
-        const angle = (data.score / 10) * 180 - 90;
-        needle.style.transform = `rotate(${angle}deg)`;
-        summaryElement.innerText = data.summary;
-        policyListElement.innerHTML = '';
-        data.policies.forEach(policy => {
-            const li = document.createElement('li');
-            li.className = `policy-item ${policy.status}`;
-            li.innerHTML = `
-                <span class="dot"></span>
-                <p>${policy.text}</p>
-            `;
-            policyListElement.appendChild(li);
-        });
+// State
+let currentContractText = '';
+let currentSummaryData = null;
+let isApiKeyConfigured = false;
+let isBackendReachable = false;
+
+// ---- Connection Status Indicator ----
+
+function updateConnectionIndicator(state) {
+    // state: 'checking', 'connected', 'no-key', 'disconnected'
+    connectionStatus.className = 'connection-status';
+
+    switch (state) {
+        case 'checking':
+            connectionStatus.textContent = '⏳';
+            connectionStatus.title = 'Bağlantı kontrol ediliyor...';
+            connectionStatus.classList.add('checking');
+            break;
+        case 'connected':
+            connectionStatus.textContent = '🟢';
+            connectionStatus.title = 'Bağlı — API anahtarı ayarlı';
+            connectionStatus.classList.add('connected');
+            break;
+        case 'no-key':
+            connectionStatus.textContent = '🟡';
+            connectionStatus.title = 'Backend bağlı — API anahtarı gerekli';
+            connectionStatus.classList.add('disconnected');
+            break;
+        case 'disconnected':
+            connectionStatus.textContent = '🔴';
+            connectionStatus.title = 'Backend sunucusuna bağlanılamıyor';
+            connectionStatus.classList.add('disconnected');
+            break;
     }
+}
 
-    async function analyzeContract(text) {
-        summaryElement.innerText = "Analiz ediliyor.. Lütfen bekleyin.";
-        try {
-            const response = await fetch('http://localhost:8000/summarize', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    text: text,
-                    title: "Web Sayfası" 
-                })
-            });
-            const data = await response.json();
-            const normalizedData = {
-                score: data.risk_score / 10,
-                summary: data.summary_points.join(' '),
-                policies: data.risks.map(r => ({ status: "red", text: r }))
-            };
-            updateUI(normalizedData);
-        } catch (error) {
-            console.error("Hata:", error);
-            summaryElement.innerText = "Sunucuya bağlanılamadı.";
+// ---- Startup Flow ----
+
+async function checkBackendStatus() {
+    updateConnectionIndicator('checking');
+
+    try {
+        const response = await fetch(`${API_BASE}/api/config-status`, {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' }
+        });
+
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}`);
         }
+
+        const data = await response.json();
+        isBackendReachable = true;
+        isApiKeyConfigured = data.initialized === true;
+
+        if (isApiKeyConfigured) {
+            updateConnectionIndicator('connected');
+            btnSummarize.disabled = false;
+            hideStatus();
+        } else {
+            updateConnectionIndicator('no-key');
+            btnSummarize.disabled = true;
+            settingsPanel.classList.remove('hidden');
+            setStatus('API anahtarı ayarlanmamış. Lütfen aşağıdan Gemini API anahtarınızı girin.', true);
+        }
+    } catch (e) {
+        console.error('Backend bağlantı hatası:', e);
+        isBackendReachable = false;
+        isApiKeyConfigured = false;
+        updateConnectionIndicator('disconnected');
+        btnSummarize.disabled = true;
+        setStatus('Backend sunucusuna bağlanılamıyor. Sunucunun çalıştığından emin olun (localhost:8000).', true);
+    }
+}
+
+// Run startup check
+document.addEventListener('DOMContentLoaded', async () => {
+    // Load saved API key from chrome storage
+    chrome.storage.local.get(['geminiApiKey'], async (result) => {
+        if (result.geminiApiKey) {
+            apiKeyInput.value = result.geminiApiKey;
+            // Try sending saved API key to backend first
+            await sendApiKeyToBackend(result.geminiApiKey);
+        }
+        // Then check backend status
+        await checkBackendStatus();
+    });
+});
+
+// ---- Settings Management ----
+
+btnSettings.addEventListener('click', () => {
+    settingsPanel.classList.toggle('hidden');
+});
+
+btnSaveSettings.addEventListener('click', async () => {
+    const apiKey = apiKeyInput.value.trim();
+    if (!apiKey) {
+        showSettingsStatus('API anahtarı boş olamaz!', true);
+        return;
     }
 
+    // Save to chrome storage
+    chrome.storage.local.set({ geminiApiKey: apiKey });
+
+    // Send to backend
+    const success = await sendApiKeyToBackend(apiKey);
+    if (success) {
+        showSettingsStatus('✅ Kaydedildi!');
+        // Re-check backend status to update UI
+        await checkBackendStatus();
+    } else {
+        showSettingsStatus('❌ Backend\'e gönderilemedi. Sunucunun çalıştığından emin olun.', true);
+    }
+});
+
+async function sendApiKeyToBackend(apiKey) {
+    try {
+        const response = await fetch(`${API_BASE}/api/set-config`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ api_key: apiKey })
+        });
+        return response.ok;
+    } catch (e) {
+        console.error('Backend bağlantı hatası:', e);
+        return false;
+    }
+}
+
+function showSettingsStatus(msg, isError = false) {
+    settingsStatus.textContent = msg;
+    settingsStatus.style.color = isError ? 'var(--color-red)' : 'var(--color-green)';
+    settingsStatus.classList.add('visible');
+    setTimeout(() => settingsStatus.classList.remove('visible'), 3000);
+}
+
+// ---- Status & Loading ----
+
+function setStatus(msg, isError = false) {
+    statusMessage.textContent = msg;
+    statusMessage.classList.remove('hidden', 'error');
+    if (isError) statusMessage.classList.add('error');
+}
+
+function hideStatus() {
+    statusMessage.classList.add('hidden');
+}
+
+function setLoading(loading) {
+    btnSummarize.disabled = loading;
+    btnText.textContent = loading ? 'Analiz Ediliyor...' : 'Bu Sayfayı Özetle';
+    loader.classList.toggle('hidden', !loading);
+}
+
+// ---- Gauge & Results ----
+
+function updateGauge(score) {
+    // Score is 1-10, needle goes from -90deg (0) to +90deg (10)
+    const angle = (score / 10) * 180 - 90;
+    gaugeNeedle.style.transform = `rotate(${angle}deg)`;
+    scoreValue.textContent = score;
+
+    // Color based on score
+    let color;
+    if (score <= 3) {
+        color = 'var(--color-green)';
+    } else if (score <= 6) {
+        color = 'var(--color-yellow)';
+    } else {
+        color = 'var(--color-red)';
+    }
+    scoreValue.style.color = color;
+    gaugeNeedle.style.backgroundColor = color;
+}
+
+function renderResults(data) {
+    // data = { summary_stats: { risk_score, overall_summary, critical_highlight }, analysis_segments: [...] }
+    const stats = data.summary_stats;
+    const segments = data.analysis_segments || [];
+
+    // Update gauge
+    updateGauge(stats.risk_score);
+
+    // Update summary
+    summaryText.textContent = stats.overall_summary;
+
+    // Critical highlight
+    if (stats.critical_highlight) {
+        criticalText.textContent = stats.critical_highlight;
+        criticalSection.classList.remove('hidden');
+    } else {
+        criticalSection.classList.add('hidden');
+    }
+
+    // Policy items
+    policyList.innerHTML = '';
+    segments.forEach(seg => {
+        const li = document.createElement('li');
+        li.className = `policy-item ${seg.risk_level}`;
+        li.innerHTML = `
+            <span class="dot"></span>
+            <div class="text-content">
+                <p class="item-text">${seg.text}</p>
+                <p class="item-reason">${seg.reason}</p>
+            </div>
+        `;
+        policyList.appendChild(li);
+    });
+
+    // Show results and chat
+    resultsSection.classList.remove('hidden');
+    chatSection.classList.remove('hidden');
+    hideStatus();
+}
+
+// ---- Summarize Flow ----
+
+btnSummarize.addEventListener('click', () => {
+    // Double-check API key status before attempting
+    if (!isApiKeyConfigured) {
+        settingsPanel.classList.remove('hidden');
+        setStatus('Önce API anahtarınızı ayarlayın.', true);
+        return;
+    }
+
+    setLoading(true);
+    hideStatus();
+    resultsSection.classList.add('hidden');
+    chatSection.classList.add('hidden');
+
+    // Get text from active tab via content.js
     chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        chrome.tabs.sendMessage(tabs[0].id, { action: "GET_TEXT" }, (response) => {
-            if (response && response.text) {
-                analyzeContract(response.text);
-            } else {
-                summaryElement.innerText = "Analiz edilecek metin bulunamadı.";
+        if (!tabs[0]) {
+            setStatus('Aktif sekme bulunamadı.', true);
+            setLoading(false);
+            return;
+        }
+
+        chrome.tabs.sendMessage(tabs[0].id, { action: 'GET_TEXT' }, async (response) => {
+            if (chrome.runtime.lastError || !response || !response.text) {
+                setStatus('Sayfa içeriği okunamadı. Sayfayı yenileyip tekrar deneyin.', true);
+                setLoading(false);
+                return;
+            }
+
+            currentContractText = response.text;
+            setStatus('Yapay zeka analiz ediyor...');
+
+            try {
+                const apiResponse = await fetch(`${API_BASE}/summarize`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        text: currentContractText,
+                        url: tabs[0].url,
+                        title: tabs[0].title
+                    })
+                });
+
+                if (!apiResponse.ok) {
+                    const errData = await apiResponse.json().catch(() => ({}));
+                    throw new Error(errData.detail || `Sunucu hatası: ${apiResponse.status}`);
+                }
+
+                const data = await apiResponse.json();
+
+                if (data.error) {
+                    setStatus(data.message || 'Bir hata oluştu.', true);
+                    setLoading(false);
+                    return;
+                }
+
+                currentSummaryData = data;
+                renderResults(data);
+                setLoading(false);
+                btnText.textContent = 'Tekrar Özetle';
+
+            } catch (error) {
+                console.error('API hatası:', error);
+                if (error.message.includes('API anahtarı') || error.message.includes('API key')) {
+                    setStatus('API anahtarı geçersiz veya süresi dolmuş. Lütfen ⚙️ Ayarlar\'dan yeni bir anahtar girin.', true);
+                    settingsPanel.classList.remove('hidden');
+                    isApiKeyConfigured = false;
+                    updateConnectionIndicator('no-key');
+                } else if (error.message.includes('Failed to fetch')) {
+                    setStatus('Backend sunucusuna bağlanılamadı. Sunucunun çalıştığından emin olun (localhost:8000).', true);
+                    updateConnectionIndicator('disconnected');
+                } else {
+                    setStatus(error.message, true);
+                }
+                setLoading(false);
             }
         });
     });
-
-});
-=======
-const btn = document.getElementById("summarize-btn");
-const btnText = document.querySelector(".btn-text");
-const loader = document.querySelector(".loader");
-const statusBox = document.getElementById("status");
-const resultContainer = document.getElementById("result-container");
-
-const uiRiskScore = document.getElementById("risk-score");
-const uiRiskLabel = document.getElementById("risk-label");
-const uiSummary = document.getElementById("summary-points");
-const uiRisks = document.getElementById("risk-points");
-const uiNotes = document.getElementById("note-points");
-
-const setStatus = (msg, isError = false) => {
-  statusBox.textContent = msg;
-  statusBox.style.color = isError ? "var(--danger)" : "var(--text-main)";
-  statusBox.classList.remove("hidden");
-};
-
-const hideStatus = () => {
-  statusBox.classList.add("hidden");
-};
-
-const fillList = (ulElement, items) => {
-  ulElement.innerHTML = "";
-  if (!items || items.length === 0) {
-    const li = document.createElement("li");
-    li.textContent = "Bulunamadı.";
-    li.style.color = "var(--text-muted)";
-    ulElement.appendChild(li);
-    return;
-  }
-  items.forEach(item => {
-    const li = document.createElement("li");
-    li.textContent = item;
-    ulElement.appendChild(li);
-  });
-};
-
-const renderResult = (payload) => {
-  if (!payload) return;
-
-  if (!payload.ok) {
-    setStatus(payload.error || "Bir hata oluştu.", true);
-    return;
-  }
-
-  const data = payload.data;
-  if (!data) return;
-
-  hideStatus();
-  
-  // Risk Skoru Renklendirmesi
-  const score = data.risk_score || 0;
-  uiRiskScore.textContent = score;
-  let color = "var(--success)";
-  let label = "Düşük Risk";
-  
-  if (score > 33) {
-    color = "var(--warning)";
-    label = "Orta Risk";
-  }
-  if (score > 66) {
-    color = "var(--danger)";
-    label = "Yüksek Risk";
-  }
-
-  uiRiskScore.style.color = color;
-  uiRiskLabel.textContent = label;
-  uiRiskLabel.style.color = color;
-
-  // Listeleri doldur
-  fillList(uiSummary, data.summary_points);
-  fillList(uiRisks, data.risks);
-  fillList(uiNotes, data.notes);
-
-  resultContainer.classList.remove("hidden");
-};
-
-// Sayfa yüklendiğinde eski sonucu göster (varsa)
-chrome.storage.local.get(["lastSummary"], (result) => {
-  if (result.lastSummary) {
-    renderResult(result.lastSummary);
-  }
 });
 
-btn.addEventListener("click", () => {
-  btn.disabled = true;
-  btnText.textContent = "Analiz Ediliyor...";
-  loader.classList.remove("hidden");
-  hideStatus();
-  resultContainer.classList.add("hidden");
-  
-  chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-    const activeTab = tabs[0];
-    
-    // content script'ten metni iste
-    chrome.tabs.sendMessage(activeTab.id, { action: "GET_TEXT" }, (response) => {
-      if (chrome.runtime.lastError || !response || !response.text) {
-        setStatus("Sayfa içeriği okunamadı. Lütfen sayfayı yenileyip eklentiyi tekrar açın.", true);
-        btn.disabled = false;
-        btnText.textContent = "Bu Sayfayı Özetle";
-        loader.classList.add("hidden");
-        return;
-      }
-      
-      const text = response.text;
-      
-      // background.js'e gönderip API çağrısını başlat
-      chrome.runtime.sendMessage({
-        type: "PAGE_TEXT",
-        text: text,
-        url: activeTab.url,
-        title: activeTab.title
-      }, (apiResponse) => {
-        btn.disabled = false;
-        btnText.textContent = "Tekrar Özetle";
-        loader.classList.add("hidden");
-        
-        if (chrome.runtime.lastError) {
-          setStatus("Arka plan servisi ile iletişim kurulamadı.", true);
-          return;
-        }
-        
-        renderResult(apiResponse);
-      });
+// ---- Copy ----
+
+btnCopy.addEventListener('click', () => {
+    if (!currentSummaryData) return;
+
+    const stats = currentSummaryData.summary_stats;
+    const segments = currentSummaryData.analysis_segments || [];
+
+    let copyText = `Risk Skoru: ${stats.risk_score}/10\n\n`;
+    copyText += `Özet: ${stats.overall_summary}\n\n`;
+    if (stats.critical_highlight) {
+        copyText += `⚠️ Kritik: ${stats.critical_highlight}\n\n`;
+    }
+    copyText += `Politika Analizi:\n`;
+    segments.forEach(seg => {
+        const icon = seg.risk_level === 'red' ? '🔴' : seg.risk_level === 'yellow' ? '🟡' : '🟢';
+        copyText += `${icon} ${seg.text} — ${seg.reason}\n`;
     });
-  });
+
+    navigator.clipboard.writeText(copyText).then(() => {
+        const original = btnCopy.textContent;
+        btnCopy.textContent = '✅ Kopyalandı!';
+        setTimeout(() => { btnCopy.textContent = original; }, 2000);
+    });
+});
+
+// ---- Chat ----
+
+function addChatBubble(text, type) {
+    const bubble = document.createElement('div');
+    bubble.className = `chat-bubble ${type}`;
+    bubble.textContent = text;
+    chatMessages.appendChild(bubble);
+    chatMessages.scrollTop = chatMessages.scrollHeight;
+    return bubble;
+}
+
+async function sendChatMessage() {
+    const message = chatInput.value.trim();
+    if (!message || !currentContractText) return;
+
+    chatInput.value = '';
+    btnSend.disabled = true;
+
+    addChatBubble(message, 'user');
+    const loadingBubble = addChatBubble('Düşünüyor...', 'assistant loading');
+
+    try {
+        const response = await fetch(`${API_BASE}/chat`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contract_text: currentContractText,
+                message: message
+            })
+        });
+
+        const data = await response.json();
+        loadingBubble.remove();
+
+        if (response.ok) {
+            addChatBubble(data.response, 'assistant');
+        } else {
+            addChatBubble('Yanıt alınamadı. Lütfen tekrar deneyin.', 'assistant');
+        }
+    } catch (error) {
+        loadingBubble.remove();
+        addChatBubble('Sunucuya bağlanılamadı.', 'assistant');
+    }
+
+    btnSend.disabled = false;
+}
+
+btnSend.addEventListener('click', sendChatMessage);
+chatInput.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendChatMessage();
 });

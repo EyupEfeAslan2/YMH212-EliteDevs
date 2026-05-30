@@ -2,111 +2,91 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Sözleşme Özetleyici</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <div class="app-container">
+        <!-- Header -->
         <header class="header">
             <div class="logo-title">
                 <span class="icon-shield">🛡️</span>
                 <h1>Sözleşme Özetleyici</h1>
             </div>
             <div class="header-actions">
-                <button id="btn-copy" class="btn-icon" title="Özeti Kopyala">📄</button>
+                <span id="connection-status" class="connection-status" title="Bağlantı durumu">⏳</span>
                 <button id="btn-settings" class="btn-icon" title="Ayarlar">⚙️</button>
-                <button id="btn-close" class="btn-icon" title="Kapat">✖️</button>
             </div>
         </header>
 
-        <section class="risk-section">
-            <div class="gauge-container">
-                <div class="gauge-needle" style="transform: rotate(32.4deg);"></div>
-                <div class="score">6.8</div>
-                <div class="score-label">Risk Skoru</div>
-                <div class="gauge-min">0</div>
-                <div class="gauge-max">10</div>
+        <!-- Settings Panel -->
+        <section id="settings-panel" class="settings-panel hidden">
+            <h3>API Ayarları</h3>
+            <div class="settings-field">
+                <label for="api-key-input">Gemini API Anahtarı</label>
+                <input type="password" id="api-key-input" placeholder="API anahtarınızı girin...">
+            </div>
+            <div class="settings-actions">
+                <button id="btn-save-settings" class="btn-save">Kaydet</button>
+                <span id="settings-status" class="settings-status"></span>
             </div>
         </section>
 
-        <section class="summary-section">
-            <p>Bu sözleşme, kullanıcı verilerini üçüncü şahıslarla paylaşma hakkını saklı tutar ve veri saklama sürelerindeki belirsizlik nedeniyle orta-yüksek düzeyde gizlilik riski barındırır.</p>
-        </section>
-
-        <section class="policy-section">
-            <h2>Politika Analizi</h2>
-            <ul class="policy-list">
-                <li class="policy-item red">
-                    <span class="dot"></span>
-                    <p>Kişisel veriler üçüncü taraf reklamcılarla paylaşılıyor</p>
-                </li>
-                <li class="policy-item red">
-                    <span class="dot"></span>
-                    <p>Siteler arası tarama etkinliği takibi etkin</p>
-                </li>
-                <li class="policy-item yellow">
-                    <span class="dot"></span>
-                    <p>Veri saklama süresi açıkça belirtilmemiş</p>
-                </li>
-                <li class="policy-item green">
-                    <span class="dot"></span>
-                    <p>Veriler endüstri standardı SSL ile şifreleniyor</p>
-                </li>
-            </ul>
-        </section>
-
-        <footer class="chat-section">
-            <input type="text" placeholder="Bu politika hakkında sor..." class="chat-input">
-            <button class="btn-send">➤</button> 
-        </footer>
-    </div>
-    
-=======
-    <title>Sözleşme Özetleyici</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="popup.css">
-</head>
-<body>
-    <div class="container">
-        <header>
-            <h1>📜 Sözleşme Özetleyici</h1>
-            <p class="subtitle">Bu sayfadaki hukuksal veya uzun metinleri analiz edin.</p>
-        </header>
-
-        <main>
-            <button id="summarize-btn" class="primary-btn">
+        <!-- Action Button -->
+        <section class="action-section">
+            <button id="btn-summarize" class="btn-primary">
                 <span class="btn-text">Bu Sayfayı Özetle</span>
-                <span class="loader hidden"></span>
+                <span id="loader" class="loader hidden"></span>
             </button>
+        </section>
 
-            <div id="status" class="status-box hidden">
-            </div>
+        <!-- Status Message -->
+        <div id="status-message" class="status-message hidden"></div>
 
-            <div id="result-container" class="result-container hidden">
-                <div class="score-card">
-                    <h3>Risk Skoru</h3>
-                    <div id="risk-score" class="score-value">0</div>
-                    <div id="risk-label" class="score-label">Bilinmiyor</div>
-                </div>
-
-                <div class="section">
-                    <h3>✅ Özet</h3>
-                    <ul id="summary-points" class="list"></ul>
-                </div>
-
-                <div class="section">
-                    <h3>⚠️ Riskler ve Dikkat Edilecekler</h3>
-                    <ul id="risk-points" class="list risks"></ul>
-                </div>
-
-                <div class="section">
-                    <h3>📌 Ek Notlar</h3>
-                    <ul id="note-points" class="list notes"></ul>
+        <!-- Results Section -->
+        <section id="results-section" class="results-section hidden">
+            <!-- Risk Gauge -->
+            <div class="risk-section">
+                <div class="gauge-container">
+                    <div id="gauge-needle" class="gauge-needle"></div>
+                    <div id="score-value" class="score">0</div>
+                    <div id="score-label" class="score-label">Risk Skoru</div>
+                    <div class="gauge-min">0</div>
+                    <div class="gauge-max">10</div>
                 </div>
             </div>
-        </main>
+
+            <!-- Summary -->
+            <div class="summary-section">
+                <p id="summary-text">Özet bekleniyor...</p>
+            </div>
+
+            <!-- Critical Highlight -->
+            <div id="critical-section" class="critical-section hidden">
+                <div class="critical-badge">⚠️ Kritik</div>
+                <p id="critical-text"></p>
+            </div>
+
+            <!-- Policy Analysis -->
+            <section class="policy-section">
+                <h2>Politika Analizi</h2>
+                <ul id="policy-list" class="policy-list"></ul>
+            </section>
+
+            <!-- Copy Button -->
+            <button id="btn-copy" class="btn-copy" title="Özeti Kopyala">📋 Özeti Kopyala</button>
+        </section>
+
+        <!-- Chat Section -->
+        <section id="chat-section" class="chat-section hidden">
+            <h2>💬 Sözleşme Hakkında Sor</h2>
+            <div id="chat-messages" class="chat-messages"></div>
+            <div class="chat-input-area">
+                <input type="text" id="chat-input" placeholder="Bu politika hakkında sor..." class="chat-input">
+                <button id="btn-send" class="btn-send">➤</button>
+            </div>
+        </section>
     </div>
 
     <script src="popup.js"></script>
