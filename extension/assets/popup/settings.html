@@ -1,10 +1,42 @@
-<html>  
+<!DOCTYPE html>
+<html lang="tr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Ayarlar - Sözleşme Özetleyici</title>
+    <link rel="stylesheet" href="popup.css">
     <link rel="stylesheet" href="settings.css">
 </head>
 <body>
-    <div class="settings-container">
+    <div class="app-container">
+        <header class="header">
+            <div class="logo-title">
+                <button id="btn-back" class="btn-icon" title="Ana Ekrana Dön" style="font-size: 16px; margin-right: 8px;">⬅</button>
+                <h1>Ayarlar</h1>
+            </div>
+        </header>
+        
+        <div class="settings-content">
+            <div class="setting-group">
+                <label for="summary-detail">Özet Seviyesi (RAG Analizi)</label>
+                <select id="summary-detail">
+                    <option value="full">Tam Özet (Kapsamlı Analiz)</option>
+                    <option value="risks_only">Sadece Kritik Riskler</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label for="language-select">Çıktı Dili</label>
+                <select id="language-select">
+                    <option value="tr">Türkçe</option>
+                    <option value="en">İngilizce</option>
+                </select>
+            </div>
+
+            <button id="btn-save" class="btn-save">Ayarları Kaydet</button>
+            <div id="status-msg"></div>
+        </div>
+    </div>
+    <script src="settings.js"></script>
+</body>
 </html>
