@@ -17,24 +17,25 @@ class ContractChatSession:
         self.contract_text = contract_text
         self.contract_summary = contract_summary or {}
         self.client = get_gemini_client()
-        self.chat_history = []
         self._build_system_instruction()
     
     def _build_system_instruction(self):
         """Build system instruction for the chat."""
+        # Kontrat metnini makul bir uzunlukta tut (token limiti için)
+        truncated_text = self.contract_text[:8000]
+        
         self.system_instruction = f"""
-SYSTEM ROLE:
 You are an elite Legal Tech AI Assistant specializing in privacy agreements.
 
 --- DOCUMENT TO ANALYZE ---
-{self.contract_text[:5000]}...
+{truncated_text}
 
 --- PREVIOUS ANALYSIS ---
 {self.contract_summary}
 
 STRICT OUTPUT RULES (NON-NEGOTIABLE):
 1. NO HEADERS: Never use 'Recommendation:', 'veri_silme_durumu:', 'Answer:', 'Cevap:' or any text followed by a colon (:).
-2. NO JSON/SYMBOLS: Never use {{}}, [], or parentheses ().
+2. NO JSON/SYMBOLS: Never use curly braces, brackets, or parentheses.
 3. LANGUAGE MATCH: You MUST detect the user's language and respond in THAT SAME LANGUAGE. If asked in Turkish, answer in Turkish. If asked in English, answer in English.
 4. PURE TEXT ONLY: Start your sentence directly with the answer.
    - BAD: "Cevap: Verileriniz silinmez."
@@ -46,22 +47,11 @@ STRICT OUTPUT RULES (NON-NEGOTIABLE):
     
     def ask(self, user_query: str) -> str:
         try:
-            # Build messages with system instruction
-            messages = [
-                {
-                    "role": "user",
-                    "parts": [self.system_instruction]
-                },
-                {
-                    "role": "user",
-                    "parts": [user_query]
-                }
-            ]
-            
             response = self.client.models.generate_content(
                 model=GEMINI_MODEL,
-                contents=messages,
+                contents=user_query,
                 config={
+                    "system_instruction": self.system_instruction,
                     "temperature": 0.7,
                     "max_output_tokens": 500,
                 }

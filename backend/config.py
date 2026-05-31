@@ -3,74 +3,49 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-_gemini_api_key = None
+_api_key = None
 _api_key_initialized = False
-_selected_api = None
 
-def select_api():
-    """Let user select which API to use."""
-    global _selected_api
-    
-    print("\n" + "="*50)
-    print("API Seçimi")
-    print("="*50)
-    print("1. Gemini (Google)")
-    print("2. OpenAI (ChatGPT)")
-    print("3. Claude (Anthropic)")
-    
-    choice = input("\nHangi API kullanacaksınız? (1-3): ").strip()
-    
-    api_options = {
-        "1": "gemini",
-        "2": "openai",
-        "3": "claude"
-    }
-    
-    _selected_api = api_options.get(choice, "gemini")
-    return _selected_api
 
 def get_gemini_api_key() -> str:
-    global _gemini_api_key, _api_key_initialized
+    """Get the Gemini API key. Checks memory first, then env var."""
+    global _api_key, _api_key_initialized
     
-    if _api_key_initialized:
-        if not _gemini_api_key:
-            raise ValueError("Gemini API anahtarı girilmedi!")
-        return _gemini_api_key
+    if _api_key_initialized and _api_key:
+        return _api_key
     
-    _gemini_api_key = os.getenv("GEMINI_API_KEY")
+    # Try environment variable
+    env_key = os.getenv("GEMINI_API_KEY")
+    if env_key and env_key.strip() and env_key != "your-gemini-api-key-here":
+        _api_key = env_key.strip()
+        _api_key_initialized = True
+        return _api_key
     
-    if not _gemini_api_key:
-        try:
-            api = select_api()
-            if api == "gemini":
-                _gemini_api_key = input("Lütfen Gemini API anahtarınızı girin: ").strip()
-            elif api == "openai":
-                _gemini_api_key = input("Lütfen OpenAI API anahtarınızı girin: ").strip()
-            elif api == "claude":
-                _gemini_api_key = input("Lütfen Claude API anahtarınızı girin: ").strip()
-        except EOFError:
-            raise ValueError("API anahtarı girilmedi ve ortam değişkeni de bulunmadı!")
-    
-    if not _gemini_api_key:
-        raise ValueError("API anahtarı boş olamaz!")
-    
-    _api_key_initialized = True
-    return _gemini_api_key
+    raise ValueError(
+        "API anahtarı ayarlanmamış! "
+        "Lütfen eklenti ayarlarından Gemini API anahtarınızı girin "
+        "veya .env dosyasına GEMINI_API_KEY ekleyin."
+    )
+
 
 def set_gemini_api_key(api_key: str) -> None:
-
-    global _gemini_api_key, _api_key_initialized
+    """Set the Gemini API key from frontend."""
+    global _api_key, _api_key_initialized
     
     if not api_key or not api_key.strip():
         raise ValueError("API anahtarı boş olamaz!")
     
-    _gemini_api_key = api_key.strip()
+    _api_key = api_key.strip()
     _api_key_initialized = True
 
-def is_api_key_initialized() -> bool: #Check if API key has been initialized
+
+def is_api_key_initialized() -> bool:
+    """Check if API key has been initialized."""
+    # Also check env var on first call
+    if not _api_key_initialized:
+        try:
+            get_gemini_api_key()
+            return True
+        except ValueError:
+            return False
     return _api_key_initialized
-
-def get_selected_api() -> str:
-    """Get selected API type."""
-    return _selected_api or "gemini"
-

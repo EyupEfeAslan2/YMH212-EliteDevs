@@ -55,14 +55,51 @@ TEXT TO ANALYZE:
 """
     return prompt
 
-# Json Cleaning
+# Geliştirilmiş ve Kırılmaz JSON Temizleyici
 def clean_json_response(raw_text: str) -> Optional[dict]:
-    clean_text = raw_text.replace('```json', '').replace('```', '').strip()
-    try:
-        return json.loads(clean_text)
-    except json.JSONDecodeError as e:
-        print(f"JSON parsing error: {e}")
+    import re as _re
+    
+    if not raw_text:
+        print("🚨 HATA: Gemini'den tamamen boş bir metin geldi!")
         return None
+        
+    text_to_parse = raw_text.strip()
+    
+    # 1. Direkt parse dene
+    try:
+        return json.loads(text_to_parse)
+    except json.JSONDecodeError as e:
+        first_error = e
+    
+    # 2. Markdown temizle
+    text_to_parse = _re.sub(r'^```[a-zA-Z]*\s*', '', text_to_parse)
+    text_to_parse = _re.sub(r'\s*```$', '', text_to_parse)
+    text_to_parse = text_to_parse.strip()
+    
+    try:
+        return json.loads(text_to_parse)
+    except json.JSONDecodeError:
+        pass
+    
+    # 3. Regex ile en dıştaki objeyi çek
+    match = _re.search(r'(\{[\s\S]*\})', text_to_parse)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except json.JSONDecodeError as e:
+            print(f"🚨 REGEX SONRASI BİLE PATLADI! Detay: {str(e)}")
+    
+    # Ekrana tam olarak nerede patladığını basıyoruz:
+    print("\n" + "="*50)
+    print("🚨 PYTHON JSON PARSE HATASI DETAYI 🚨")
+    print(f"Hata Mesajı: {str(first_error)}")
+    print(f"Hata Satırı (Line): {first_error.lineno}, Sütun (Col): {first_error.colno}")
+    print("-"*50)
+    print("GEMINI'DEN GELEN HAM METİN (Aynen Aşağıdaki Gibi):")
+    print(raw_text)
+    print("="*50 + "\n")
+    
+    return None
 
 
 def summarize_text(text: str) -> dict:
@@ -74,8 +111,9 @@ def summarize_text(text: str) -> dict:
             model=GEMINI_MODEL,
             contents=prompt,
             config={
-                "temperature": 1.0,
-                "max_output_tokens": 2000,
+                "temperature": 0.2, # Daha kararlı ve kısa cevaplar için 0.2 yaptık
+                "max_output_tokens": 4000, # 2000'den 4000'e çıkardık, böylece yarıda kesilmeyecek!
+                "response_mime_type": "application/json" 
             }
         )
         
@@ -93,7 +131,7 @@ def summarize_text(text: str) -> dict:
         return {
             "error": True,
             "message": f"Error during summarization: {str(e)}"
-        }
+        }    
 
 
 def get_summary_stats(summary_result: dict) -> dict:
@@ -108,7 +146,6 @@ def get_summary_stats(summary_result: dict) -> dict:
 
 
 def get_analysis_segments(summary_result: dict) -> list:
-
     if summary_result.get("error"):
         return []
     

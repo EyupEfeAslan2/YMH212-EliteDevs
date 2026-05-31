@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
-from config import get_gemini_api_key
+from config import get_gemini_api_key, set_gemini_api_key, is_api_key_initialized
 from summarize import summarize_text, get_summary_stats, get_analysis_segments
 from chat import create_chat_session
 
@@ -161,6 +161,10 @@ class ChatResponse(BaseModel):
     language_detected: Optional[str] = None
 
 
+class ConfigRequest(BaseModel):
+    api_key: str = Field(..., min_length=1)
+
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
@@ -186,86 +190,27 @@ app.add_middleware(
 
 
 # ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-
-def build_prompt(text: str, title: Optional[str], url: Optional[str]) -> str:
-    """Legacy function - kept for backward compatibility."""
-    meta = []
-    if title:
-        meta.append(f"Baslik: {title}")
-    if url:
-        meta.append(f"URL: {url}")
-    meta_block = "\n".join(meta)
-
-    return (
-        "Sen bir hukuk metni ozetleyicisin. Ciktiyi yalnizca asagidaki JSON "
-        "formatinda ver:\n"
-        '{\n  "risk_score": 0-100,\n  "summary_points": [""],\n'
-        '  "risks": [""],\n  "notes": [""]\n}\n\n'
-        f"{meta_block}\n\nMetin:\n{text}"
-    )
-
-
-async def call_gemini_legacy(prompt: str) -> dict:
-    """Legacy function - kept for backward compatibility."""
-    api_key = os.getenv("GEMINI_API_KEY", "API_Buraya_Gelecek")
-    gemini_url = os.getenv("GEMINI_API_URL", DEFAULT_GEMINI_URL)
-
-    if api_key == "API_Buraya_Gelecek":
-        return {
-            "error": True,
-            "message": "GEMINI_API_KEY not configured"
-        }
-
-    payload = {
-        "contents": [
-            {
-                "role": "user",
-                "parts": [{"text": prompt}],
-            }
-        ]
-    }
-
-    async with httpx.AsyncClient(timeout=60) as client:
-        response = await client.post(
-            gemini_url,
-            params={"key": api_key},
-            headers={"Content-Type": "application/json"},
-            json=payload,
-        )
-
-    if response.status_code != 200:
-        raise HTTPException(
-            status_code=502,
-            detail=f"Gemini API hatasi: {response.status_code}",
-        )
-
-    data = response.json()
-    text = (
-        data.get("candidates", [{}])[0]
-        .get("content", {})
-        .get("parts", [{}])[0]
-        .get("text", "")
-    )
-
-    try:
-        parsed = json.loads(text)
-        return {
-            "error": False,
-            "data": parsed
-        }
-    except (json.JSONDecodeError, TypeError, ValueError):
-        return {
-            "error": True,
-            "message": "Failed to parse response"
-        }
-
-
-# ---------------------------------------------------------------------------
 # Routes
 # ---------------------------------------------------------------------------
+
+
+@app.post("/api/set-config")
+async def set_config(payload: ConfigRequest):
+    """Set API key from the extension frontend."""
+    try:
+        set_gemini_api_key(payload.api_key)
+        return {"status": "success", "message": "API anahtarı başarıyla ayarlandı."}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.get("/api/config-status")
+async def config_status():
+    """Check if API key is configured."""
+    return {
+        "initialized": is_api_key_initialized(),
+        "api_type": "gemini"
+    }
 
 
 @app.post("/summarize", response_model=SummaryResponse)
@@ -353,7 +298,7 @@ async def chat(payload: ChatMessage) -> ChatResponse:
     try:
         session = create_chat_session(
             payload.contract_text,
-            summary=None  
+            summary=None  # Can be populated with pre-computed summary
         )
         response_text = session.ask(payload.message)
         
