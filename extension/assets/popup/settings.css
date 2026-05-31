@@ -1,0 +1,60 @@
+.settings-content {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    margin-top: 10px;
+}
+
+.setting-group {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    background: var(--panel-bg);
+    padding: 12px;
+    border-radius: 8px;
+    border: 1px solid var(--border-color);
+}
+
+.setting-group label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--text-muted);
+}
+
+.setting-group select {
+    background: var(--bg-main);
+    color: var(--text-main);
+    border: 1px solid var(--border-color);
+    padding: 8px;
+    border-radius: 4px;
+    outline: none;
+    font-size: 12px;
+    cursor: pointer;
+}
+
+.setting-group select:focus {
+    border-color: var(--color-purple);
+}
+
+.btn-save {
+    background: var(--color-purple);
+    color: white;
+    border: none;
+    padding: 10px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-top: 10px;
+    transition: 0.2s;
+}
+
+.btn-save:hover {
+    background: #b16df0;
+}
+
+#status-msg {
+    font-size: 12px;
+    color: #00cc66;
+    text-align: center;
+    min-height: 15px;
+}
