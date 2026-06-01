@@ -11,12 +11,26 @@
         <!-- Header -->
         <header class="header">
             <div class="logo-title">
-                <span class="icon-shield">🛡️</span>
+                <span class="icon-shield">
+                    <svg class="icon-svg shield-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+                    </svg>
+                </span>
                 <h1>Sözleşme Özetleyici</h1>
             </div>
             <div class="header-actions">
-                <span id="connection-status" class="connection-status" title="Bağlantı durumu">⏳</span>
-                <button id="btn-settings" class="btn-icon" title="Ayarlar">⚙️</button>
+                <span id="connection-status" class="connection-status" title="Bağlantı durumu"></span>
+                <button id="btn-theme" class="btn-icon" title="Tema Değiştir">
+                    <svg class="icon-svg theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+                    </svg>
+                </button>
+                <button id="btn-settings" class="btn-icon" title="Ayarlar">
+                    <svg class="icon-svg settings-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="3"></circle>
+                        <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+                    </svg>
+                </button>
             </div>
         </header>
 
@@ -64,7 +78,14 @@
 
             <!-- Critical Highlight -->
             <div id="critical-section" class="critical-section hidden">
-                <div class="critical-badge">⚠️ Kritik</div>
+                <div class="critical-badge">
+                    <svg class="icon-svg warning-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+                        <line x1="12" y1="9" x2="12" y2="13"></line>
+                        <line x1="12" y1="17" x2="12.01" y2="17"></line>
+                    </svg>
+                    <span>Kritik</span>
+                </div>
                 <p id="critical-text"></p>
             </div>
 
@@ -75,16 +96,32 @@
             </section>
 
             <!-- Copy Button -->
-            <button id="btn-copy" class="btn-copy" title="Özeti Kopyala">📋 Özeti Kopyala</button>
+            <button id="btn-copy" class="btn-copy" title="Özeti Kopyala">
+                <svg class="icon-svg copy-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+                <span>Özeti Kopyala</span>
+            </button>
         </section>
 
         <!-- Chat Section -->
         <section id="chat-section" class="chat-section hidden">
-            <h2>💬 Sözleşme Hakkında Sor</h2>
+            <h2>
+                <svg class="icon-svg chat-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <span>Sözleşme Hakkında Sor</span>
+            </h2>
             <div id="chat-messages" class="chat-messages"></div>
             <div class="chat-input-area">
                 <input type="text" id="chat-input" placeholder="Bu politika hakkında sor..." class="chat-input">
-                <button id="btn-send" class="btn-send">➤</button>
+                <button id="btn-send" class="btn-send" title="Gönder">
+                    <svg class="icon-svg send-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <line x1="22" y1="2" x2="11" y2="13"></line>
+                        <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                    </svg>
+                </button>
             </div>
         </section>
     </div>

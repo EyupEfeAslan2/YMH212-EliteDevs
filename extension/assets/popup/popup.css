@@ -13,6 +13,22 @@
     --color-purple-bg: rgba(155, 81, 224, 0.1);
 }
 
+body.light-mode {
+    --bg-main: #f4f6fa;
+    --bg-gradient: linear-gradient(145deg, #f8fafc, #e2e8f0);
+    --panel-bg: rgba(0, 0, 0, 0.03);
+    --panel-border: rgba(0, 0, 0, 0.06);
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    --color-red: #ef4444;
+    --color-yellow: #f59e0b;
+    --color-green: #10b981;
+    --color-purple: #7c3aed;
+    --color-purple-hover: #6d28d9;
+    --color-purple-bg: rgba(124, 58, 237, 0.08);
+}
+
+
 * {
     box-sizing: border-box;
     margin: 0;
@@ -69,11 +85,20 @@ body::-webkit-scrollbar-thumb {
     background: linear-gradient(135deg, #c9a0ff, #9b51e0);
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
+    transition: background 0.3s;
+}
+
+body.light-mode .logo-title h1 {
+    background: linear-gradient(135deg, #7c3aed, #4c1d95);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
 }
 
 .icon-shield {
-    font-size: 20px;
+    display: flex;
+    align-items: center;
 }
+
 
 .btn-icon {
     background: none;
@@ -94,27 +119,58 @@ body::-webkit-scrollbar-thumb {
 
 /* ---- Connection Status Indicator ---- */
 .connection-status {
-    font-size: 10px;
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
     cursor: default;
     transition: all 0.3s ease;
 }
 
-.connection-status.connected {
-    filter: none;
-}
-
-.connection-status.disconnected {
-    filter: none;
-}
-
 .connection-status.checking {
+    background-color: var(--color-yellow);
+    box-shadow: 0 0 6px var(--color-yellow);
     animation: pulse 1.5s ease-in-out infinite;
 }
 
-@keyframes pulse {
-    0%, 100% { opacity: 0.4; }
-    50% { opacity: 1; }
+.connection-status.connected {
+    background-color: var(--color-green);
+    box-shadow: 0 0 6px var(--color-green);
 }
+
+.connection-status.no-key {
+    background-color: var(--color-yellow);
+    box-shadow: 0 0 6px var(--color-yellow);
+}
+
+.connection-status.disconnected {
+    background-color: var(--color-red);
+    box-shadow: 0 0 6px var(--color-red);
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 0.4; transform: scale(0.9); }
+    50% { opacity: 1; transform: scale(1.1); }
+}
+
+/* ---- Icon SVG Global Styles ---- */
+.icon-svg {
+    width: 16px;
+    height: 16px;
+    display: inline-flex;
+    align-self: center;
+    stroke: currentColor;
+    fill: none;
+    transition: all 0.2s ease;
+}
+
+.icon-shield .icon-svg {
+    width: 20px;
+    height: 20px;
+    color: var(--color-purple);
+    vertical-align: middle;
+}
+
 
 /* ---- Settings Panel ---- */
 .settings-panel {
@@ -618,3 +674,76 @@ body::-webkit-scrollbar-thumb {
     from { opacity: 0; transform: translateY(-10px); }
     to { opacity: 1; transform: translateY(0); }
 }
+
+/* ---- Light Mode Overrides ---- */
+body.light-mode .settings-field input {
+    background: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(0, 0, 0, 0.15);
+    color: #0f172a;
+}
+
+body.light-mode .settings-field input::placeholder {
+    color: rgba(71, 85, 105, 0.5);
+}
+
+body.light-mode .chat-input {
+    color: #0f172a;
+}
+
+body.light-mode .chat-input::placeholder {
+    color: rgba(71, 85, 105, 0.5);
+}
+
+body.light-mode .loader {
+    border: 2px solid rgba(0, 0, 0, 0.1);
+    border-top-color: var(--color-purple);
+}
+
+body.light-mode .chat-bubble.assistant {
+    background: rgba(0, 0, 0, 0.03);
+    border-color: rgba(0, 0, 0, 0.06);
+    color: #0f172a;
+}
+
+body.light-mode .chat-messages::-webkit-scrollbar-track,
+body.light-mode .policy-list::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+/* Adjust SVG icon margins and alignment */
+.btn-primary .icon-svg, .btn-copy .icon-svg {
+    width: 16px;
+    height: 16px;
+}
+
+.btn-icon .icon-svg {
+    width: 18px;
+    height: 18px;
+}
+
+.btn-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.critical-badge .icon-svg {
+    color: var(--color-red);
+}
+
+.btn-copy, .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-copy span, .btn-primary span {
+    display: inline-block;
+}
+
+.chat-section h2 {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}

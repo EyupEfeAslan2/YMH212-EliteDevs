@@ -1,6 +1,7 @@
-const API_BASE = 'http://localhost:8000';
+const API_BASE = 'http://127.0.0.1:8000';
 
 // DOM elements
+const btnTheme = document.getElementById('btn-theme');
 const btnSettings = document.getElementById('btn-settings');
 const settingsPanel = document.getElementById('settings-panel');
 const apiKeyInput = document.getElementById('api-key-input');
@@ -34,30 +35,65 @@ let currentSummaryData = null;
 let isApiKeyConfigured = false;
 let isBackendReachable = false;
 
+// ---- Theme Management ----
+
+function setTheme(theme) {
+    if (theme === 'light') {
+        document.body.classList.add('light-mode');
+        // Set sun icon SVG
+        btnTheme.innerHTML = `
+            <svg class="icon-svg theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+        `;
+    } else {
+        document.body.classList.remove('light-mode');
+        // Set moon icon SVG
+        btnTheme.innerHTML = `
+            <svg class="icon-svg theme-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+        `;
+    }
+}
+
+// Toggle theme
+btnTheme.addEventListener('click', () => {
+    const isLight = document.body.classList.contains('light-mode');
+    const newTheme = isLight ? 'dark' : 'light';
+    setTheme(newTheme);
+    chrome.storage.local.set({ theme: newTheme });
+});
+
 // ---- Connection Status Indicator ----
 
 function updateConnectionIndicator(state) {
     // state: 'checking', 'connected', 'no-key', 'disconnected'
     connectionStatus.className = 'connection-status';
+    connectionStatus.textContent = ''; // clear emojis
 
     switch (state) {
         case 'checking':
-            connectionStatus.textContent = '⏳';
             connectionStatus.title = 'Bağlantı kontrol ediliyor...';
             connectionStatus.classList.add('checking');
             break;
         case 'connected':
-            connectionStatus.textContent = '🟢';
             connectionStatus.title = 'Bağlı — API anahtarı ayarlı';
             connectionStatus.classList.add('connected');
             break;
         case 'no-key':
-            connectionStatus.textContent = '🟡';
             connectionStatus.title = 'Backend bağlı — API anahtarı gerekli';
-            connectionStatus.classList.add('disconnected');
+            connectionStatus.classList.add('no-key');
             break;
         case 'disconnected':
-            connectionStatus.textContent = '🔴';
             connectionStatus.title = 'Backend sunucusuna bağlanılamıyor';
             connectionStatus.classList.add('disconnected');
             break;
@@ -105,6 +141,15 @@ async function checkBackendStatus() {
 
 // Run startup check
 document.addEventListener('DOMContentLoaded', async () => {
+    // Load saved theme
+    chrome.storage.local.get(['theme'], (result) => {
+        if (result.theme) {
+            setTheme(result.theme);
+        } else {
+            setTheme('dark');
+        }
+    });
+
     // Load saved API key from chrome storage
     chrome.storage.local.get(['geminiApiKey'], async (result) => {
         if (result.geminiApiKey) {
@@ -116,6 +161,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         await checkBackendStatus();
     });
 });
+
 
 // ---- Settings Management ----
 
@@ -136,11 +182,11 @@ btnSaveSettings.addEventListener('click', async () => {
     // Send to backend
     const success = await sendApiKeyToBackend(apiKey);
     if (success) {
-        showSettingsStatus('✅ Kaydedildi!');
+        showSettingsStatus('Kaydedildi!');
         // Re-check backend status to update UI
         await checkBackendStatus();
     } else {
-        showSettingsStatus('❌ Backend\'e gönderilemedi. Sunucunun çalıştığından emin olun.', true);
+        showSettingsStatus('Backend\'e gönderilemedi. Sunucunun çalıştığından emin olun.', true);
     }
 });
 
@@ -309,7 +355,7 @@ btnSummarize.addEventListener('click', () => {
             } catch (error) {
                 console.error('API hatası:', error);
                 if (error.message.includes('API anahtarı') || error.message.includes('API key')) {
-                    setStatus('API anahtarı geçersiz veya süresi dolmuş. Lütfen ⚙️ Ayarlar\'dan yeni bir anahtar girin.', true);
+                    setStatus('API anahtarı geçersiz veya süresi dolmuş. Lütfen Ayarlar\'dan yeni bir anahtar girin.', true);
                     settingsPanel.classList.remove('hidden');
                     isApiKeyConfigured = false;
                     updateConnectionIndicator('no-key');
@@ -336,20 +382,24 @@ btnCopy.addEventListener('click', () => {
     let copyText = `Risk Skoru: ${stats.risk_score}/10\n\n`;
     copyText += `Özet: ${stats.overall_summary}\n\n`;
     if (stats.critical_highlight) {
-        copyText += `⚠️ Kritik: ${stats.critical_highlight}\n\n`;
+        copyText += `Kritik Madde: ${stats.critical_highlight}\n\n`;
     }
     copyText += `Politika Analizi:\n`;
     segments.forEach(seg => {
-        const icon = seg.risk_level === 'red' ? '🔴' : seg.risk_level === 'yellow' ? '🟡' : '🟢';
-        copyText += `${icon} ${seg.text} — ${seg.reason}\n`;
+        const label = seg.risk_level === 'red' ? '[Kritik]' : seg.risk_level === 'yellow' ? '[Orta]' : '[Düşük]';
+        copyText += `${label} ${seg.text} — ${seg.reason}\n`;
     });
 
     navigator.clipboard.writeText(copyText).then(() => {
-        const original = btnCopy.textContent;
-        btnCopy.textContent = '✅ Kopyalandı!';
-        setTimeout(() => { btnCopy.textContent = original; }, 2000);
+        const btnCopySpan = btnCopy.querySelector('span');
+        if (btnCopySpan) {
+            const original = btnCopySpan.textContent;
+            btnCopySpan.textContent = 'Kopyalandı!';
+            setTimeout(() => { btnCopySpan.textContent = original; }, 2000);
+        }
     });
 });
+
 
 // ---- Chat ----
 
